@@ -1,0 +1,13 @@
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+
+# Local editor/agent settings
+.vscode/
+.claude/
+
+# Generated app packages and installers
+dist/
+*.dmg
+*.app/
