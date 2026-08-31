@@ -31,18 +31,14 @@ enum TerminalLauncher {
     /// SSH_ASKPASS so a Keychain-saved password is supplied automatically
     /// instead of ssh prompting interactively.
     static func shellCommand(for server: Server) -> String {
-        let keyFlag: String
-        if server.keyRequired, let keyPath = server.keyPath, !keyPath.isEmpty {
-            keyFlag = " -i \(keyPath)"
-        } else {
-            keyFlag = ""
-        }
+        let authArguments = SSHCommandBuilder.authenticationArguments(for: server)
+        let sshArguments = SSHCommandBuilder.shellArguments(authArguments + [server.alias])
 
         guard KeychainService.hasPassword(account: server.id.uuidString) else {
-            return "ssh\(keyFlag) \(server.alias)"
+            return "ssh \(sshArguments)"
         }
         let scriptPath = AskpassScriptProvider.ensureScript().path
-        return "env SSH_ASKPASS='\(scriptPath)' SSH_ASKPASS_REQUIRE=force TERMACOS_SERVER_ID='\(server.id.uuidString)' ssh\(keyFlag) \(server.alias)"
+        return "env SSH_ASKPASS=\(SSHCommandBuilder.shellQuote(scriptPath)) SSH_ASKPASS_REQUIRE=force TERMACOS_SERVER_ID=\(SSHCommandBuilder.shellQuote(server.id.uuidString)) ssh \(sshArguments)"
     }
 
     /// Opens a new Terminal/iTerm window and runs the ssh command for `server`.

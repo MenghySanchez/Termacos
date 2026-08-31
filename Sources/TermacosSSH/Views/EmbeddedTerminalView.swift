@@ -45,10 +45,7 @@ struct EmbeddedTerminalView: NSViewRepresentable {
             environment.append("TERMACOS_SERVER_ID=\(server.id.uuidString)")
         }
 
-        var args = [server.alias]
-        if server.keyRequired, let keyPath = server.keyPath, !keyPath.isEmpty {
-            args = ["-i", keyPath, server.alias]
-        }
+        let args = SSHCommandBuilder.authenticationArguments(for: server) + [server.alias]
 
         view.startProcess(executable: "/usr/bin/ssh", args: args, environment: environment)
         focus(view)

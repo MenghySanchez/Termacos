@@ -5,30 +5,35 @@ import Security
 /// server's UUID. The app never keeps a password in memory longer than a
 /// single form session, and never writes it to servers.json.
 enum KeychainService {
-    private static let service = "ec.com.tebusco.termacos-ssh.password"
+    private static let service = "com.menghysanchez.termacos-ssh.password"
+    private static let legacyService = "ec.com.tebusco.termacos-ssh.password"
 
     static func save(password: String, account: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
-        SecItemDelete(query as CFDictionary)
+        delete(account: account)
 
-        var attributes = query
+        var attributes = query(service: service, account: account)
         attributes[kSecValueData as String] = Data(password.utf8)
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         SecItemAdd(attributes as CFDictionary, nil)
     }
 
     static func readPassword(account: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
+        readPassword(service: service, account: account) ?? readPassword(service: legacyService, account: account)
+    }
+
+    static func hasPassword(account: String) -> Bool {
+        hasPassword(service: service, account: account) || hasPassword(service: legacyService, account: account)
+    }
+
+    static func delete(account: String) {
+        SecItemDelete(query(service: service, account: account) as CFDictionary)
+        SecItemDelete(query(service: legacyService, account: account) as CFDictionary)
+    }
+
+    private static func readPassword(service: String, account: String) -> String? {
+        var query = query(service: service, account: account)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
               let data = item as? Data else {
@@ -37,22 +42,17 @@ enum KeychainService {
         return String(data: data, encoding: .utf8)
     }
 
-    static func hasPassword(account: String) -> Bool {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
+    private static func hasPassword(service: String, account: String) -> Bool {
+        var query = query(service: service, account: account)
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
     }
 
-    static func delete(account: String) {
-        let query: [String: Any] = [
+    private static func query(service: String, account: String) -> [String: Any] {
+        [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        SecItemDelete(query as CFDictionary)
     }
 }

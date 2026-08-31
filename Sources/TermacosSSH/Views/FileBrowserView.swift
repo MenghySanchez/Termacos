@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 /// between the two panes without needing its bytes on the local machine —
 /// the local pane resolves it back to an SFTPEntry and triggers a real
 /// download only once it lands.
-private let remoteEntryDragType = "com.tebusco.termacos.sftp-entry"
+private let remoteEntryDragType = "com.menghysanchez.termacos.sftp-entry"
 
 struct FileBrowserView: View {
     let server: Server

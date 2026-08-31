@@ -38,6 +38,19 @@ enum SSHConfigManager {
                 block += "    IdentityFile \(keyPath)\n"
                 block += "    IdentitiesOnly yes\n"
             }
+            switch server.authenticationMode {
+            case .automatic:
+                break
+            case .keyOnly:
+                block += "    PubkeyAuthentication yes\n"
+                block += "    PasswordAuthentication no\n"
+                block += "    KbdInteractiveAuthentication no\n"
+            case .keyAndPassword:
+                block += "    PubkeyAuthentication yes\n"
+                block += "    PasswordAuthentication yes\n"
+                block += "    KbdInteractiveAuthentication yes\n"
+                block += "    PreferredAuthentications publickey,password,keyboard-interactive\n"
+            }
             block += "    UseKeychain yes\n"
             block += "    AddKeysToAgent yes\n"
             block += "\n"
