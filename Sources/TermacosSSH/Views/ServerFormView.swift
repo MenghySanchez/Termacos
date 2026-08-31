@@ -65,7 +65,7 @@ struct ServerFormView: View {
                         } label: {
                             Label("Importar clave privada…", systemImage: "square.and.arrow.down")
                         }
-                        Text("Se moverá a ~/.ssh con permisos restringidos. El archivo original se elimina de su ubicación actual.")
+                        Text("Usá una llave privada en formato OpenSSH. Las llaves PuTTY (.ppk) deben convertirse antes de importarlas. Se moverá a ~/.ssh con permisos restringidos.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {

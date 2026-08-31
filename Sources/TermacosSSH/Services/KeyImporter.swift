@@ -3,11 +3,14 @@ import Foundation
 enum KeyImportError: LocalizedError {
     case sourceUnreadable
     case destinationExists
+    case puttyKeyUnsupported
 
     var errorDescription: String? {
         switch self {
         case .sourceUnreadable: return "No se pudo leer el archivo seleccionado."
         case .destinationExists: return "Ya existe una clave con ese nombre en ~/.ssh."
+        case .puttyKeyUnsupported:
+            return "La llave seleccionada está en formato PuTTY (.ppk). macOS SSH no puede usarla directamente. Convertí la llave a formato OpenSSH y volvé a importarla."
         }
     }
 }
@@ -36,9 +39,25 @@ enum KeyImporter {
             throw KeyImportError.sourceUnreadable
         }
 
+        if isPuTTYPrivateKey(sourceURL) {
+            throw KeyImportError.puttyKeyUnsupported
+        }
+
         try fm.moveItem(at: sourceURL, to: destination)
         try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: destination.path)
 
         return destination.path
+    }
+
+    private static func isPuTTYPrivateKey(_ url: URL) -> Bool {
+        if url.pathExtension.localizedCaseInsensitiveCompare("ppk") == .orderedSame {
+            return true
+        }
+
+        guard let data = try? Data(contentsOf: url),
+              let text = String(data: data.prefix(128), encoding: .utf8) else {
+            return false
+        }
+        return text.hasPrefix("PuTTY-User-Key-File-")
     }
 }
