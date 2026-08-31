@@ -9,6 +9,7 @@ struct ServerFormView: View {
     @State private var port: String
     @State private var username: String
     @State private var keyPath: String
+    @State private var keyRequired: Bool
     @State private var notes: String
     @State private var importError: String?
     @State private var password: String = ""
@@ -26,6 +27,7 @@ struct ServerFormView: View {
         _port = State(initialValue: String(server?.port ?? 22))
         _username = State(initialValue: server?.username ?? "")
         _keyPath = State(initialValue: server?.keyPath ?? "")
+        _keyRequired = State(initialValue: server?.keyRequired ?? false)
         _notes = State(initialValue: server?.notes ?? "")
         _hasSavedPassword = State(initialValue: KeychainService.hasPassword(account: id.uuidString))
     }
@@ -77,6 +79,11 @@ struct ServerFormView: View {
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
+                    Toggle("Llave requerida", isOn: $keyRequired)
+                        .tint(Theme.accent)
+                    Text(keyRequired ? "SSH intentará autenticar solo con la llave. Si falla, la conexión se rechazará." : "SSH usará la llave si está disponible, pero permitirá autenticación por contraseña como respaldo.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Contraseña (opcional)") {
@@ -154,6 +161,7 @@ struct ServerFormView: View {
             port: Int(port) ?? 22,
             username: username.trimmingCharacters(in: .whitespaces),
             keyPath: keyPath.isEmpty ? nil : keyPath,
+            keyRequired: keyRequired,
             notes: notes
         )
         onSave(server)

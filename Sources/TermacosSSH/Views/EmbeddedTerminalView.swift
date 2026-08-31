@@ -44,7 +44,12 @@ struct EmbeddedTerminalView: NSViewRepresentable {
             environment.append("TERMACOS_SERVER_ID=\(server.id.uuidString)")
         }
 
-        view.startProcess(executable: "/usr/bin/ssh", args: [server.alias], environment: environment)
+        var args = [server.alias]
+        if server.keyRequired, let keyPath = server.keyPath, !keyPath.isEmpty {
+            args = ["-i", keyPath, server.alias]
+        }
+
+        view.startProcess(executable: "/usr/bin/ssh", args: args, environment: environment)
         DispatchQueue.main.async {
             view.window?.makeFirstResponder(view)
         }
