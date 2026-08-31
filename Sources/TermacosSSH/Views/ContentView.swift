@@ -296,8 +296,8 @@ struct ServerDetailView: View {
                 }
             }
 
-            if let lastExitCode, lastExitCode != 0 {
-                Label("La sesión anterior terminó con código \(lastExitCode).", systemImage: "exclamationmark.triangle.fill")
+            if let lastExitCode, let reason = SSHExitCode.description(for: lastExitCode) {
+                Label(reason, systemImage: "exclamationmark.triangle.fill")
                     .font(.callout)
                     .foregroundStyle(Theme.warning)
             }
