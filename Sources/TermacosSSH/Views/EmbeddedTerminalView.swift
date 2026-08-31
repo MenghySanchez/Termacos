@@ -24,6 +24,7 @@ final class EmbeddedTerminalCoordinator: NSObject, LocalProcessTerminalViewDeleg
 /// buttons use — no separate auth path to maintain.
 struct EmbeddedTerminalView: NSViewRepresentable {
     let server: Server
+    var isActive: Bool = true
     var onExit: ((Int32?) -> Void)? = nil
 
     func makeCoordinator() -> EmbeddedTerminalCoordinator {
@@ -50,13 +51,20 @@ struct EmbeddedTerminalView: NSViewRepresentable {
         }
 
         view.startProcess(executable: "/usr/bin/ssh", args: args, environment: environment)
-        DispatchQueue.main.async {
-            view.window?.makeFirstResponder(view)
-        }
+        focus(view)
         return view
     }
 
-    func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {}
+    func updateNSView(_ nsView: LocalProcessTerminalView, context: Context) {
+        focus(nsView)
+    }
+
+    private func focus(_ view: LocalProcessTerminalView) {
+        guard isActive else { return }
+        DispatchQueue.main.async {
+            view.window?.makeFirstResponder(view)
+        }
+    }
 
     static func dismantleNSView(_ nsView: LocalProcessTerminalView, coordinator: EmbeddedTerminalCoordinator) {
         if nsView.process.running {

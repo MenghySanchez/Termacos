@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 APP_NAME="Termacos SSH"
-BUNDLE_ID="ec.com.tebusco.termacos-ssh"
+BUNDLE_ID="com.menghysanchez.termacos-ssh"
 BUILD_DIR=".build/release"
 APP_DIR="dist/${APP_NAME}.app"
 VERSION="$(cat VERSION)"

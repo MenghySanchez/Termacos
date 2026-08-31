@@ -9,6 +9,9 @@ struct ContentView: View {
     @State private var showingForm = false
     @State private var editingServer: Server?
     @State private var pendingDeletion: Server?
+    @State private var terminalSessions: [TerminalSession] = []
+    @State private var activeTerminalSessionID: TerminalSession.ID?
+    @State private var lastExitCodes: [Server.ID: Int32] = [:]
 
     private var filteredServers: [Server] {
         guard !searchText.isEmpty else { return store.servers }
@@ -68,19 +71,7 @@ struct ContentView: View {
                 }
             }
         } detail: {
-            if let server = store.servers.first(where: { $0.id == selection }) {
-                ServerDetailView(server: server, onEdit: {
-                    editingServer = server
-                    showingForm = true
-                })
-                .id(server.id)
-            } else {
-                ContentUnavailableView(
-                    "Sin servidor seleccionado",
-                    systemImage: "server.rack",
-                    description: Text("Elegí un servidor de la lista o agregá uno nuevo.")
-                )
-            }
+            detailWorkspace
         }
         .sheet(isPresented: $showingForm) {
             ServerFormView(server: editingServer) { server in
@@ -110,6 +101,77 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
+    private var detailWorkspace: some View {
+        if terminalSessions.isEmpty {
+            selectedServerDetail
+        } else {
+            VSplitView {
+                selectedServerDetail
+                    .frame(minHeight: 220)
+                TerminalSessionsView(
+                    sessions: terminalSessions,
+                    activeSessionID: $activeTerminalSessionID,
+                    onExit: recordTerminalExit,
+                    onClose: closeTerminalSession
+                )
+                .frame(minHeight: 260)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var selectedServerDetail: some View {
+        if let server = store.servers.first(where: { $0.id == selection }) {
+            ServerDetailView(
+                server: server,
+                lastExitCode: lastExitCodes[server.id],
+                onEdit: {
+                    editingServer = server
+                    showingForm = true
+                },
+                onConnect: openTerminalSession
+            )
+            .id(server.id)
+        } else {
+            ContentUnavailableView(
+                "Sin servidor seleccionado",
+                systemImage: "server.rack",
+                description: Text("Elegí un servidor de la lista o agregá uno nuevo.")
+            )
+        }
+    }
+
+    private func openTerminalSession(for server: Server) {
+        if let session = terminalSessions.first(where: { $0.server.id == server.id && $0.exitCode == nil }) {
+            activeTerminalSessionID = session.id
+            return
+        }
+
+        terminalSessions.removeAll { $0.server.id == server.id && $0.exitCode != nil }
+        lastExitCodes[server.id] = nil
+        store.markConnected(server)
+
+        let session = TerminalSession(server: server)
+        terminalSessions.append(session)
+        activeTerminalSessionID = session.id
+    }
+
+    private func recordTerminalExit(sessionID: TerminalSession.ID, server: Server, exitCode: Int32?) {
+        guard let index = terminalSessions.firstIndex(where: { $0.id == sessionID }) else { return }
+        terminalSessions[index].exitCode = exitCode
+        if let exitCode {
+            lastExitCodes[server.id] = exitCode
+        }
+    }
+
+    private func closeTerminalSession(_ sessionID: TerminalSession.ID) {
+        let wasActive = activeTerminalSessionID == sessionID
+        terminalSessions.removeAll { $0.id == sessionID }
+        guard wasActive else { return }
+        activeTerminalSessionID = terminalSessions.last?.id
+    }
+
     private var emptySidebarState: some View {
         VStack(spacing: Theme.Spacing.md) {
             Image(systemName: "server.rack")
@@ -133,6 +195,12 @@ struct ContentView: View {
         .padding(Theme.Spacing.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
+
+private struct TerminalSession: Identifiable, Equatable {
+    let id = UUID()
+    let server: Server
+    var exitCode: Int32?
 }
 
 private struct ServerRow: View {
@@ -163,16 +231,16 @@ private struct ServerRow: View {
 
 struct ServerDetailView: View {
     let server: Server
+    let lastExitCode: Int32?
     let onEdit: () -> Void
+    let onConnect: (Server) -> Void
 
-    @EnvironmentObject private var store: ServerStore
     @AppStorage("defaultTerminalApp") private var defaultTerminalAppRaw: String = TerminalApp.terminal.rawValue
     @State private var mode: DetailMode = .overview
-    @State private var lastExitCode: Int32?
     @State private var copiedField: String?
 
     private enum DetailMode: Equatable {
-        case overview, terminal, files
+        case overview, files
     }
 
     private var defaultTerminalApp: TerminalApp {
@@ -188,43 +256,11 @@ struct ServerDetailView: View {
             switch mode {
             case .overview:
                 overview
-            case .terminal:
-                terminalSession
             case .files:
                 fileBrowserSession
             }
         }
         .animation(.easeInOut(duration: 0.2), value: mode)
-    }
-
-    private var terminalSession: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: Theme.Spacing.sm) {
-                Circle()
-                    .fill(Theme.accent)
-                    .frame(width: 7, height: 7)
-                Text(connectionString)
-                    .font(.mono(12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    TerminalLauncher.connect(server: server, using: defaultTerminalApp)
-                } label: {
-                    Label("Abrir en \(defaultTerminalApp.displayName)", systemImage: "arrow.up.forward.app")
-                }
-                .buttonStyle(.bordered)
-                Button("Desconectar", role: .destructive) { mode = .overview }
-                    .buttonStyle(.bordered)
-            }
-            .padding(.horizontal, Theme.Spacing.md)
-            .padding(.vertical, Theme.Spacing.sm)
-            .background(.bar)
-            Divider()
-            EmbeddedTerminalView(server: server) { exitCode in
-                lastExitCode = exitCode
-                mode = .overview
-            }
-        }
     }
 
     private var fileBrowserSession: some View {
@@ -306,11 +342,9 @@ struct ServerDetailView: View {
 
             HStack(spacing: Theme.Spacing.md) {
                 Button {
-                    lastExitCode = nil
-                    store.markConnected(server)
-                    mode = .terminal
+                    onConnect(server)
                 } label: {
-                    Label("Conectar", systemImage: "terminal.fill")
+                    Label("Conectar en pestaña", systemImage: "terminal.fill")
                         .padding(.vertical, 4)
                         .padding(.horizontal, 4)
                 }
@@ -345,6 +379,130 @@ struct ServerDetailView: View {
         }
         .padding(Theme.Spacing.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct TerminalSessionsView: View {
+    let sessions: [TerminalSession]
+    @Binding var activeSessionID: TerminalSession.ID?
+    let onExit: (TerminalSession.ID, Server, Int32?) -> Void
+    let onClose: (TerminalSession.ID) -> Void
+
+    private var selectedSessionID: TerminalSession.ID? {
+        activeSessionID ?? sessions.first?.id
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            tabBar
+            Divider()
+            ZStack {
+                ForEach(sessions) { session in
+                    let isActive = session.id == selectedSessionID
+                    TerminalSessionPane(
+                        session: session,
+                        isActive: isActive,
+                        onExit: onExit
+                    )
+                    .opacity(isActive ? 1 : 0)
+                    .allowsHitTesting(isActive)
+                    .accessibilityHidden(!isActive)
+                    .zIndex(isActive ? 1 : 0)
+                }
+            }
+        }
+        .background(Color(nsColor: .textBackgroundColor))
+    }
+
+    private var tabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Theme.Spacing.sm) {
+                ForEach(sessions) { session in
+                    let isActive = session.id == selectedSessionID
+                    HStack(spacing: 0) {
+                        Button {
+                            activeSessionID = session.id
+                        } label: {
+                            HStack(spacing: Theme.Spacing.xs) {
+                                Circle()
+                                    .fill(session.exitCode == nil ? Theme.accent : Theme.warning)
+                                    .frame(width: 7, height: 7)
+                                Text(session.server.name)
+                                    .font(.callout.weight(isActive ? .semibold : .regular))
+                                    .lineLimit(1)
+                                if session.exitCode != nil {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(Theme.warning)
+                                }
+                            }
+                            .padding(.leading, Theme.Spacing.sm)
+                            .padding(.trailing, Theme.Spacing.xs)
+                            .padding(.vertical, 6)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            onClose(session.id)
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, Theme.Spacing.sm)
+                                .padding(.vertical, 7)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Cerrar sesión")
+                    }
+                    .background(
+                        isActive ? Theme.accent.opacity(0.16) : Color(nsColor: .controlBackgroundColor),
+                        in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                    )
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.vertical, Theme.Spacing.sm)
+        }
+        .background(.bar)
+    }
+}
+
+private struct TerminalSessionPane: View {
+    let session: TerminalSession
+    let isActive: Bool
+    let onExit: (TerminalSession.ID, Server, Int32?) -> Void
+
+    private var connectionString: String {
+        "\(session.server.username)@\(session.server.host):\(session.server.port)"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: Theme.Spacing.sm) {
+                Image(systemName: session.exitCode == nil ? "terminal.fill" : "terminal")
+                    .foregroundStyle(session.exitCode == nil ? Theme.accent : Theme.warning)
+                Text(connectionString)
+                    .font(.mono(12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let exitCode = session.exitCode, let reason = SSHExitCode.description(for: exitCode) {
+                    Label(reason, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(Theme.warning)
+                } else {
+                    Text("Sesión activa")
+                        .font(.caption)
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.vertical, Theme.Spacing.sm)
+            .background(.bar)
+            Divider()
+            EmbeddedTerminalView(server: session.server, isActive: isActive) { exitCode in
+                onExit(session.id, session.server, exitCode)
+            }
+        }
     }
 }
 
