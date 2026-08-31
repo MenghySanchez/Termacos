@@ -7,6 +7,7 @@ struct Server: Identifiable, Codable, Hashable {
     var port: Int = 22
     var username: String
     var keyPath: String?
+    var keyRequired: Bool = false
     var notes: String = ""
     var lastConnectedAt: Date?
 

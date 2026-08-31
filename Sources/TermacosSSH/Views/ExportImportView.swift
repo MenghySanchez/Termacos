@@ -133,6 +133,7 @@ private struct ExportOptionsSheet: View {
     let servers: [Server]
     let onFinish: (ExportOutcome) -> Void
 
+    @State private var selectedIDs: Set<Server.ID>
     @State private var includeKeys = true
     @State private var includePasswords = false
     @State private var passphrase = ""
@@ -140,13 +141,57 @@ private struct ExportOptionsSheet: View {
     @State private var errorText: String?
     @State private var isExporting = false
 
+    init(servers: [Server], onFinish: @escaping (ExportOutcome) -> Void) {
+        self.servers = servers
+        self.onFinish = onFinish
+        _selectedIDs = State(initialValue: Set(servers.map(\.id)))
+    }
+
+    private var selectedServers: [Server] {
+        servers.filter { selectedIDs.contains($0.id) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Form {
+                Section {
+                    HStack {
+                        Button("Todos") { selectedIDs = Set(servers.map(\.id)) }
+                        Button("Ninguno") { selectedIDs.removeAll() }
+                        Spacer()
+                        Text("\(selectedIDs.count) de \(servers.count) seleccionados")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.link)
+
+                    ForEach(servers) { server in
+                        Toggle(isOn: Binding(
+                            get: { selectedIDs.contains(server.id) },
+                            set: { isOn in
+                                if isOn {
+                                    selectedIDs.insert(server.id)
+                                } else {
+                                    selectedIDs.remove(server.id)
+                                }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(server.name)
+                                Text("\(server.username)@\(server.host)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Servidores a exportar")
+                }
+
                 Section("Qué incluir") {
                     Toggle("Claves privadas SSH", isOn: $includeKeys)
                     Toggle("Contraseñas guardadas en el Llavero", isOn: $includePasswords)
-                    Text("Se exportan \(servers.count) servidor(es) con nombre, host, usuario, puerto y notas. Estos dos extras son opcionales.")
+                    Text("Estos dos extras son opcionales y se aplican solo a los servidores marcados arriba.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -183,15 +228,19 @@ private struct ExportOptionsSheet: View {
                     }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(isExporting)
+                .disabled(isExporting || selectedIDs.isEmpty)
             }
             .padding()
         }
-        .frame(width: 460, height: 430)
+        .frame(width: 460, height: 560)
     }
 
     private func export() {
         errorText = nil
+        guard !selectedIDs.isEmpty else {
+            errorText = "Elegí al menos un servidor para exportar."
+            return
+        }
         guard !passphrase.isEmpty else {
             errorText = ExportImportError.emptyPassphrase.localizedDescription
             return
@@ -202,7 +251,7 @@ private struct ExportOptionsSheet: View {
         }
 
         isExporting = true
-        let capturedServers = servers
+        let capturedServers = selectedServers
         let capturedIncludeKeys = includeKeys
         let capturedIncludePasswords = includePasswords
         let capturedPassphrase = passphrase
