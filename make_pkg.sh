@@ -30,6 +30,8 @@ pkgbuild \
     --identifier "${PKG_ID}" \
     --version "${VERSION}" \
     --install-location "/" \
+    --filter "\\.DS_Store$" \
+    --filter "/\\._" \
     "${PKG_PATH}"
 
 rm -rf "${ROOT_DIR}"
