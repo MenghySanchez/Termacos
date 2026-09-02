@@ -1,36 +1,76 @@
 import Foundation
 import Security
 
-/// Stores per-server SSH passwords in the macOS Keychain, scoped by the
-/// server's UUID. The app never keeps a password in memory longer than a
-/// single form session, and never writes it to servers.json.
+/// Stores per-server SSH secrets in the macOS Keychain, scoped by the server's
+/// UUID. Secrets are never written to servers.json or app logs.
 enum KeychainService {
-    private static let service = "com.menghysanchez.termacos-ssh.password"
-    private static let legacyService = "ec.com.tebusco.termacos-ssh.password"
+    private static let passwordService = "com.menghysanchez.termacos-ssh.password"
+    private static let keyPassphraseService = "com.menghysanchez.termacos-ssh.key-passphrase"
+    private static let legacyPasswordService = "ec.com.tebusco.termacos-ssh.password"
 
     static func save(password: String, account: String) {
-        delete(account: account)
+        save(secret: password, service: passwordService, account: account)
+    }
+
+    static func saveKeyPassphrase(_ passphrase: String, account: String) {
+        save(secret: passphrase, service: keyPassphraseService, account: account)
+    }
+
+    private static func save(secret: String, service: String, account: String) {
+        delete(service: service, account: account)
 
         var attributes = query(service: service, account: account)
-        attributes[kSecValueData as String] = Data(password.utf8)
+        attributes[kSecValueData as String] = Data(secret.utf8)
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         SecItemAdd(attributes as CFDictionary, nil)
     }
 
     static func readPassword(account: String) -> String? {
-        readPassword(service: service, account: account) ?? readPassword(service: legacyService, account: account)
+        readSecret(service: passwordService, account: account) ?? readSecret(service: legacyPasswordService, account: account)
+    }
+
+    static func readKeyPassphrase(account: String) -> String? {
+        readSecret(service: keyPassphraseService, account: account)
+    }
+
+    static func readAskpassSecret(account: String, prompt: String) -> String? {
+        if prompt.localizedCaseInsensitiveContains("passphrase") {
+            return readKeyPassphrase(account: account)
+        }
+        return readPassword(account: account)
     }
 
     static func hasPassword(account: String) -> Bool {
-        hasPassword(service: service, account: account) || hasPassword(service: legacyService, account: account)
+        hasSecret(service: passwordService, account: account) || hasSecret(service: legacyPasswordService, account: account)
+    }
+
+    static func hasKeyPassphrase(account: String) -> Bool {
+        hasSecret(service: keyPassphraseService, account: account)
+    }
+
+    static func hasAskpassSecret(account: String) -> Bool {
+        hasPassword(account: account) || hasKeyPassphrase(account: account)
     }
 
     static func delete(account: String) {
-        SecItemDelete(query(service: service, account: account) as CFDictionary)
-        SecItemDelete(query(service: legacyService, account: account) as CFDictionary)
+        deletePassword(account: account)
     }
 
-    private static func readPassword(service: String, account: String) -> String? {
+    static func deletePassword(account: String) {
+        delete(service: passwordService, account: account)
+        delete(service: legacyPasswordService, account: account)
+    }
+
+    static func deleteKeyPassphrase(account: String) {
+        delete(service: keyPassphraseService, account: account)
+    }
+
+    static func deleteAll(account: String) {
+        deletePassword(account: account)
+        deleteKeyPassphrase(account: account)
+    }
+
+    private static func readSecret(service: String, account: String) -> String? {
         var query = query(service: service, account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -42,10 +82,14 @@ enum KeychainService {
         return String(data: data, encoding: .utf8)
     }
 
-    private static func hasPassword(service: String, account: String) -> Bool {
+    private static func hasSecret(service: String, account: String) -> Bool {
         var query = query(service: service, account: account)
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
+    private static func delete(service: String, account: String) {
+        SecItemDelete(query(service: service, account: account) as CFDictionary)
     }
 
     private static func query(service: String, account: String) -> [String: Any] {

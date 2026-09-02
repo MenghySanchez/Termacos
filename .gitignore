@@ -10,4 +10,5 @@ DerivedData/
 # Generated app packages and installers
 dist/
 *.dmg
+*.pkg
 *.app/

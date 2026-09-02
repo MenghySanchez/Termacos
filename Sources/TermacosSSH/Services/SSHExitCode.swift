@@ -1,7 +1,7 @@
 import Foundation
 
 enum SSHExitCode {
-    static func description(for code: Int32) -> String? {
+    static func description(for code: Int32, server: Server? = nil) -> String? {
         let normalizedCode = normalized(code)
         guard normalizedCode != 0 else { return nil }
         switch normalizedCode {
@@ -18,6 +18,9 @@ enum SSHExitCode {
         case 143:
             return "Sesión cerrada desde la aplicación."
         case 255:
+            if server?.host == "173.231.198.46" {
+                return "No se pudo establecer la conexión SSH. VPN de TeBusco no detectada o acceso rechazado; conéctate a la VPN antes de iniciar la sesión."
+            }
             return "No se pudo establecer la conexión SSH. Revisa contraseña, llave privada, usuario, host, puerto, VPN/firewall o si el servidor rechazó el acceso."
         default:
             if (64...78).contains(normalizedCode) {

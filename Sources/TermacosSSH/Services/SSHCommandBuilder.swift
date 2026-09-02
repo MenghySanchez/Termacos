@@ -1,6 +1,20 @@
 import Foundation
 
 enum SSHCommandBuilder {
+    static func shouldUseAskpass(for server: Server) -> Bool {
+        let account = server.id.uuidString
+        let hasKey = server.keyPath?.isEmpty == false
+        let hasPassword = KeychainService.hasPassword(account: account)
+        let hasKeyPassphrase = KeychainService.hasKeyPassphrase(account: account)
+
+        if hasKey {
+            return server.authenticationMode == .keyAndPassword
+                ? hasKeyPassphrase && hasPassword
+                : hasKeyPassphrase
+        }
+        return hasPassword
+    }
+
     static func authenticationArguments(for server: Server, includeAutomaticIdentity: Bool = false) -> [String] {
         guard let keyPath = server.keyPath, !keyPath.isEmpty else { return [] }
 

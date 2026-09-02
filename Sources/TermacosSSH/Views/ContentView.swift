@@ -332,7 +332,7 @@ struct ServerDetailView: View {
                 }
             }
 
-            if let lastExitCode, let reason = SSHExitCode.description(for: lastExitCode) {
+            if let lastExitCode, let reason = SSHExitCode.description(for: lastExitCode, server: server) {
                 Label(reason, systemImage: "exclamationmark.triangle.fill")
                     .font(.callout)
                     .foregroundStyle(Theme.warning)
@@ -485,7 +485,7 @@ private struct TerminalSessionPane: View {
                     .font(.mono(12, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer()
-                if let exitCode = session.exitCode, let reason = SSHExitCode.description(for: exitCode) {
+                if let exitCode = session.exitCode, let reason = SSHExitCode.description(for: exitCode, server: session.server) {
                     Label(reason, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(Theme.warning)

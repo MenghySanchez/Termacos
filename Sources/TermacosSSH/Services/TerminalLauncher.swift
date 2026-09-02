@@ -34,7 +34,7 @@ enum TerminalLauncher {
         let authArguments = SSHCommandBuilder.authenticationArguments(for: server)
         let sshArguments = SSHCommandBuilder.shellArguments(authArguments + [server.alias])
 
-        guard KeychainService.hasPassword(account: server.id.uuidString) else {
+        guard SSHCommandBuilder.shouldUseAskpass(for: server) else {
             return "ssh \(sshArguments)"
         }
         let scriptPath = AskpassScriptProvider.ensureScript().path

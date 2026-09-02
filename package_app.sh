@@ -55,5 +55,6 @@ PLIST
 
 echo "Ad-hoc code signing..."
 codesign --force --deep --sign - "${APP_DIR}"
+xattr -cr "${APP_DIR}"
 
 echo "Done: ${APP_DIR}"

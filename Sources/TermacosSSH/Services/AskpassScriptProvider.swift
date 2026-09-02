@@ -22,7 +22,7 @@ enum AskpassScriptProvider {
         let executablePath = Bundle.main.executablePath ?? CommandLine.arguments[0]
         let content = """
         #!/bin/bash
-        exec "\(executablePath)" --termacos-askpass "$TERMACOS_SERVER_ID"
+        exec "\(executablePath)" --termacos-askpass "$TERMACOS_SERVER_ID" "$@"
         """
         try? content.write(to: url, atomically: true, encoding: .utf8)
         try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)

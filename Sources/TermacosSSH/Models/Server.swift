@@ -10,22 +10,22 @@ enum ServerAuthenticationMode: String, Codable, CaseIterable, Identifiable, Hash
     var title: String {
         switch self {
         case .automatic:
-            return "Automática"
+            return "Contraseña / automática"
         case .keyOnly:
-            return "Solo llave"
+            return "Clave privada"
         case .keyAndPassword:
-            return "Requiere llave y contraseña juntas"
+            return "Clave privada + contraseña del servidor"
         }
     }
 
     var description: String {
         switch self {
         case .automatic:
-            return "SSH usará la llave si está disponible y permitirá contraseña como respaldo."
+            return "Usa contraseña del usuario o la configuración SSH disponible."
         case .keyOnly:
-            return "SSH intentará autenticar solo con la llave. Si falla, la conexión se rechazará."
+            return "Usa la clave privada. Si está protegida, SSH pedirá o usará la passphrase guardada."
         case .keyAndPassword:
-            return "Para servidores que exigen primero la llave privada y luego la contraseña del usuario."
+            return "Para servidores que exigen clave privada y además contraseña del usuario."
         }
     }
 

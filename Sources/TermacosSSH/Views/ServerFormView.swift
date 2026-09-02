@@ -14,6 +14,9 @@ struct ServerFormView: View {
     @State private var importError: String?
     @State private var password: String = ""
     @State private var hasSavedPassword: Bool
+    @State private var keyPassphrase: String = ""
+    @State private var rememberKeyPassphrase: Bool
+    @State private var hasSavedKeyPassphrase: Bool
     @State private var isTestingConnection = false
     @State private var testResult: SSHConnectionTestOutcome?
 
@@ -32,6 +35,8 @@ struct ServerFormView: View {
         _authenticationMode = State(initialValue: server?.authenticationMode ?? .automatic)
         _notes = State(initialValue: server?.notes ?? "")
         _hasSavedPassword = State(initialValue: KeychainService.hasPassword(account: id.uuidString))
+        _rememberKeyPassphrase = State(initialValue: KeychainService.hasKeyPassphrase(account: id.uuidString))
+        _hasSavedKeyPassphrase = State(initialValue: KeychainService.hasKeyPassphrase(account: id.uuidString))
     }
 
     private var isValid: Bool {
@@ -46,6 +51,10 @@ struct ServerFormView: View {
         !isTestingConnection &&
         (!authenticationMode.requiresKey || !keyPath.isEmpty) &&
         (authenticationMode != .keyAndPassword || hasSavedPassword || !password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    private var showsKeyPassphrase: Bool {
+        authenticationMode.requiresKey || !keyPath.isEmpty
     }
 
     var body: some View {
@@ -63,9 +72,9 @@ struct ServerFormView: View {
                         Button {
                             importKey()
                         } label: {
-                            Label("Importar clave privada…", systemImage: "square.and.arrow.down")
+                            Label("Seleccionar clave privada…", systemImage: "key")
                         }
-                        Text("Usá una llave privada en formato OpenSSH. Las llaves PuTTY (.ppk) deben convertirse antes de importarlas. Se moverá a ~/.ssh con permisos restringidos.")
+                        Text("Seleccioná la clave privada, no el archivo .pub. Se aceptan claves OpenSSH ED25519 sin extensión. Si elegís una .ppk, Termacos intentará convertirla con puttygen.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -101,6 +110,27 @@ struct ServerFormView: View {
                             .font(.caption)
                             .foregroundStyle(Theme.warning)
                     }
+
+                    if showsKeyPassphrase {
+                        SecureField(hasSavedKeyPassphrase ? "Nueva passphrase de la clave (opcional)" : "Passphrase de la clave", text: $keyPassphrase)
+                        Toggle("Recordar passphrase de forma segura", isOn: $rememberKeyPassphrase)
+                            .tint(Theme.accent)
+                        if hasSavedKeyPassphrase {
+                            HStack {
+                                Label("Passphrase de clave guardada en el Llavero", systemImage: "checkmark.circle.fill")
+                                    .foregroundStyle(Theme.accent)
+                                Spacer()
+                                Button("Quitar", role: .destructive) {
+                                    KeychainService.deleteKeyPassphrase(account: originalID.uuidString)
+                                    hasSavedKeyPassphrase = false
+                                    rememberKeyPassphrase = false
+                                }
+                            }
+                        }
+                        Text("La passphrase no se guarda en archivos. Si activás recordar, se guarda en el Llavero de macOS para esta conexión.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section(authenticationMode == .keyAndPassword ? "Contraseña (requerida con llave)" : "Contraseña (opcional)") {
@@ -110,7 +140,7 @@ struct ServerFormView: View {
                                 .foregroundStyle(Theme.accent)
                             Spacer()
                             Button("Quitar", role: .destructive) {
-                                KeychainService.delete(account: originalID.uuidString)
+                                KeychainService.deletePassword(account: originalID.uuidString)
                                 hasSavedPassword = false
                             }
                         }
@@ -178,11 +208,14 @@ struct ServerFormView: View {
     private func importKey() {
         let panel = NSOpenPanel()
         panel.title = "Seleccioná la clave privada"
-        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Downloads")
+        let sshDirectory = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".ssh")
+        panel.directoryURL = FileManager.default.fileExists(atPath: sshDirectory.path)
+            ? sshDirectory
+            : FileManager.default.homeDirectoryForCurrentUser
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
+        panel.showsHiddenFiles = true
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
@@ -206,9 +239,16 @@ struct ServerFormView: View {
         let passwordForTest = enteredPassword.isEmpty
             ? KeychainService.readPassword(account: originalID.uuidString)
             : enteredPassword
+        let keyPassphraseForTest = keyPassphrase.isEmpty
+            ? KeychainService.readKeyPassphrase(account: originalID.uuidString)
+            : keyPassphrase
 
         Task {
-            let result = await SSHConnectionTester.test(server: server, password: passwordForTest)
+            let result = await SSHConnectionTester.test(
+                server: server,
+                password: passwordForTest,
+                keyPassphrase: keyPassphraseForTest
+            )
             await MainActor.run {
                 testResult = result
                 isTestingConnection = false
@@ -233,6 +273,12 @@ struct ServerFormView: View {
         let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedPassword.isEmpty {
             KeychainService.save(password: trimmedPassword, account: originalID.uuidString)
+        }
+
+        if rememberKeyPassphrase, !keyPassphrase.isEmpty {
+            KeychainService.saveKeyPassphrase(keyPassphrase, account: originalID.uuidString)
+        } else if !rememberKeyPassphrase {
+            KeychainService.deleteKeyPassphrase(account: originalID.uuidString)
         }
 
         onSave(draftServer())

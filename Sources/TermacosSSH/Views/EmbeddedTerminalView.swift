@@ -38,7 +38,7 @@ struct EmbeddedTerminalView: NSViewRepresentable {
         view.processDelegate = context.coordinator
 
         var environment = Terminal.getEnvironmentVariables()
-        if KeychainService.hasPassword(account: server.id.uuidString) {
+        if SSHCommandBuilder.shouldUseAskpass(for: server) {
             let scriptPath = AskpassScriptProvider.ensureScript().path
             environment.append("SSH_ASKPASS=\(scriptPath)")
             environment.append("SSH_ASKPASS_REQUIRE=force")

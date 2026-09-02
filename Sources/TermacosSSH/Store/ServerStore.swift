@@ -17,6 +17,7 @@ final class ServerStore: ObservableObject {
         fileURL = appSupport.appendingPathComponent("servers.json")
 
         load()
+        ensureTeBuscoTestServer()
     }
 
     private func load() {
@@ -49,11 +50,27 @@ final class ServerStore: ObservableObject {
 
     func delete(_ server: Server) {
         servers.removeAll { $0.id == server.id }
-        KeychainService.delete(account: server.id.uuidString)
+        KeychainService.deleteAll(account: server.id.uuidString)
     }
 
     func markConnected(_ server: Server) {
         guard let index = servers.firstIndex(where: { $0.id == server.id }) else { return }
         servers[index].lastConnectedAt = Date()
+    }
+
+    private func ensureTeBuscoTestServer() {
+        let server = Server(
+            name: "TeBusco Server",
+            host: "173.231.198.46",
+            port: 22,
+            username: "tebusc5",
+            keyPath: "/Users/Men/.ssh/tebusco_server_ed25519",
+            authenticationMode: .keyOnly,
+            notes: "Conectar usando la VPN de TeBusco. La passphrase de la clave no se guarda en archivos."
+        )
+
+        if !servers.contains(where: { $0.name == server.name || ($0.host == server.host && $0.username == server.username) }) {
+            servers.append(server)
+        }
     }
 }

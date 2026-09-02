@@ -35,7 +35,7 @@ final class SFTPSession: ObservableObject {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
         process.arguments = [server.alias]
 
-        if KeychainService.hasPassword(account: server.id.uuidString) {
+        if SSHCommandBuilder.shouldUseAskpass(for: server) {
             let scriptPath = AskpassScriptProvider.ensureScript().path
             var env = ProcessInfo.processInfo.environment
             env["SSH_ASKPASS"] = scriptPath
